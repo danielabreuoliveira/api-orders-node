@@ -62,41 +62,57 @@ async function createOrder(orderid, value, creationdate, items) {
 
 }
 
-// Função responsável por listar todos os pedidos
+async function getOrderById(orderid) {
+  try {
+    // 1. Busca os dados principais do pedido
+    const orderResult = await pool.query(
+      "SELECT * FROM orders WHERE orderid = $1",
+      [orderid]
+    );
+
+    // Se não encontrar o pedido, retorna null
+    if (orderResult.rows.length === 0) {
+      return null;
+    }
+
+    const order = orderResult.rows[0];
+
+    // 2. Busca os itens que pertencem a esse pedido específico
+    const itemsResult = await pool.query(
+      "SELECT productid, quantity, price FROM items WHERE orderid = $1",
+      [orderid]
+    );
+
+    // 3. Adiciona o array de itens ao objeto do pedido
+    order.items = itemsResult.rows;
+
+    return order;
+  } catch (error) {
+    console.error("Erro ao buscar pedido por ID:", error);
+    throw error;
+  }
+}
+
 async function getOrders() {
 
-  // Executa uma consulta que retorna todos os pedidos
-  // Ordenados pela data de criação (mais recente primeiro)
-  const result = await pool.query(
+  const ordersResult = await pool.query(
     "SELECT * FROM orders ORDER BY creationdate DESC"
   );
 
-  // Retorna a lista de pedidos
-  return result.rows;
+  const orders = ordersResult.rows;
 
-}
+  for (const order of orders) {
 
-// Função responsável por buscar um pedido específico pelo ID
-async function getOrderById(id) {
+    const itemsResult = await pool.query(
+      "SELECT productid, quantity, price FROM items WHERE orderid = $1",
+      [order.orderid]
+    );
 
-  // Busca o pedido na tabela orders
-  const order = await pool.query(
-    "SELECT * FROM orders WHERE orderid = $1",
-    [id]
-  );
+    order.items = itemsResult.rows;
 
-  // Busca os itens associados ao pedido
-  const items = await pool.query(
-    "SELECT productid, quantity, price FROM items WHERE orderid = $1",
-    [id]
-  );
+  }
 
-  // Retorna o pedido junto com os itens
-  return {
-    order: order.rows[0],
-    items: items.rows
-  };
-
+  return orders;
 }
 
 // Função responsável por atualizar o valor de um pedido
@@ -141,7 +157,7 @@ async function deleteOrder(orderid) {
     await client.query("COMMIT");
 
     // Retorna mensagem de sucesso
-    return { message: "Ordem deletada com sucesso" };
+    return { message: "Pedido deletado com sucesso" };
 
   } catch (error) {
 
@@ -162,7 +178,7 @@ async function deleteOrder(orderid) {
 module.exports = {
   createOrder,
   getOrders,
-  getOrderById,
   updateOrder,
   deleteOrder,
+  getOrderById
 };

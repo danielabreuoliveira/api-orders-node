@@ -1,31 +1,30 @@
-// Importa o model responsável por acessar o banco de dados
+// Importa o model responsável por acessar o banco de dados PostgreSQL
 const orderModel = require("../models/orderModel");
 
-// Função responsável por criar um pedido
+/**
+ * Cria um novo pedido realizando o de-para (mapping) dos campos
+ */
 async function createOrder(req, res) {
-
   try {
-
     // req.body contém o JSON enviado pelo cliente (Postman, frontend, etc.)
     const payload = req.body;
 
-    // Mapping do pedido
-    // Aqui transformamos os nomes dos campos do JSON recebido
-    // para os nomes usados no banco de dados
-    const orderid = payload.numeroPedido;
-    const value = payload.valorTotal;
-    const creationdate = payload.dataCriacao;
+    // --- MAPPING DO PEDIDO (BASE) ---
+    // Traduzimos os nomes das chaves do JSON para as variáveis que o Model espera
+    const orderid = payload.numeroPedido;     // numeroPedido -> orderid
+    const value = payload.valorTotal;         // valorTotal   -> value
+    const creationdate = payload.dataCriacao; // dataCriacao  -> creationdate
 
-    // Mapping dos itens
-    // Percorre a lista de itens recebida no JSON
-    // e transforma os nomes para o formato do banco
+    // --- MAPPING DOS ITENS (ARRAY) ---
+    // Percorre a lista de itens recebida no JSON e transforma cada objeto 
+    // para o formato de colunas da tabela 'items'
     const items = payload.items.map(item => ({
-      productid: item.idItem,           // id do produto
-      quantity: item.quantidadeItem,    // quantidade
-      price: item.valorItem             // valor do item
+      productid: item.idItem,           // idItem         -> productid
+      quantity: item.quantidadeItem,    // quantidadeItem -> quantity
+      price: item.valorItem             // valorItem      -> price
     }));
 
-    // Chama a função do model para salvar o pedido no banco
+    // Envia os dados já mapeados para a função de persistência no Model
     const result = await orderModel.createOrder(
       orderid,
       value,
@@ -33,126 +32,112 @@ async function createOrder(req, res) {
       items
     );
 
-    // Retorna resposta HTTP 201 (Created) com o pedido criado
+    // Retorna resposta HTTP 201 (Created) com o objeto criado no banco
     res.status(201).json(result);
 
   } catch (error) {
-
-    // Caso ocorra erro, imprime no console do servidor
+    // Caso ocorra erro (ex: banco fora do ar, erro de sintaxe), imprime no console
     console.error("Erro ao criar o pedido:", error);
-
-    // Retorna erro 500 para o client
+    // Retorna erro 500 (Internal Server Error) para o cliente
     res.status(500).json({ error: "Erro ao criar o pedido" });
-
   }
-
 }
 
-// Função responsável por listar todos os pedidos
+/**
+ * Lista todos os pedidos cadastrados
+ */
 async function getOrders(req, res) {
-
   try {
-
-    // Chama o model para buscar todos os pedidos
+    // Solicita ao model a lista completa de pedidos
     const orders = await orderModel.getOrders();
 
-    // Retorna os pedidos em formato JSON
+    // Retorna a lista em formato JSON (Status 200 é o padrão)
     res.json(orders);
-
   } catch (error) {
-
-    // Log de erro no servidor
     console.error("Erro ao buscar os pedidos:", error);
-
-    // Retorna erro para o cliente
     res.status(500).json({ error: "Erro ao buscar os pedidos" });
-
   }
-
 }
 
-// Função responsável por buscar um pedido específico pelo ID
+/**
+ * Busca os detalhes de um único pedido através do ID na URL
+ */
 async function getOrderById(req, res) {
   try {
-
-    // Pega o id enviado na URL
-    // Exemplo: /order/123
+    // Extrai o ID dos parâmetros da rota (ex: /orders/:id)
     const { id } = req.params;
 
-    // Busca o pedido no banco
+    // Chama o model para buscar o registro específico
     const order = await orderModel.getOrderById(id);
 
-    // Se não encontrar o pedido retorna erro 404
+    // Se o banco retornar vazio, encerra com status 404 (Not Found)
     if (!order) {
       return res.status(404).json({ error: "Pedido não encontrado" });
     }
 
-    // Retorna o pedido encontrado
+    // Retorna o objeto do pedido encontrado
     res.json(order);
-
   } catch (error) {
-
-    // Log do erro
     console.error("Erro ao buscar o pedido:", error);
-
-    // Retorna erro 500
     res.status(500).json({ error: "Erro ao buscar o pedido" });
-
   }
 }
 
-// Função responsável por atualizar um pedido
+/**
+ * Atualiza campos específicos do pedido (ex: valorTotal)
+ */
 async function updateOrder(req, res) {
   try {
+    // Pega o ID da URL para saber qual pedido atualizar
+    const { id } = req.params; 
 
-    // Pega o id do pedido na URL
-    const { id } = req.params;
+    // MAPPING: Extrai 'valorTotal' do body e renomeia para 'value' em uma única linha
+    const { valorTotal: value } = req.body; 
 
-    // Pega o novo valor enviado no body
-    const { value } = req.body;
+    // Validação: Impede que a atualização prossiga sem um valor definido
+    if (value === undefined) {
+      return res.status(400).json({ 
+        error: "Campo 'valorTotal' não encontrado no corpo da requisição." 
+      });
+    }
 
-    // Chama o model para atualizar o pedido
-    const order = await orderModel.updateOrder(id, value);
+    // Executa a query de UPDATE via Model
+    const updatedOrder = await orderModel.updateOrder(id, value);
+    
+    // Se o ID enviado não existir no banco, retorna 404
+    if (!updatedOrder) {
+      return res.status(404).json({ error: "Pedido não encontrado." });
+    }
 
-    // Retorna o pedido atualizado
-    res.json(order);
+    // Retorna o registro atualizado para o cliente conferir
+    res.json(updatedOrder);
 
   } catch (error) {
-
-    // Log de erro
-    console.error("Erro ao atualizar o pedido:", error);
-
-    // Retorna erro 500
-    res.status(500).json({ error: "Erro ao atualizar o pedido" });
-
+    console.error("Erro ao atualizar:", error);
+    res.status(500).json({ error: "Erro interno no servidor." });
   }
 }
 
-// Função responsável por deletar um pedido
+/**
+ * Remove um pedido e seus itens do banco de dados
+ */
 async function deleteOrder(req, res) {
   try {
-
-    // Pega o id do pedido na URL
+    // Identifica o pedido pelo ID da URL
     const { id } = req.params;
 
-    // Chama o model para excluir o pedido
+    // O model deve tratar a exclusão em cascata (itens primeiro, depois pedido)
     const result = await orderModel.deleteOrder(id);
 
-    // Retorna mensagem de sucesso
+    // Retorna a confirmação de exclusão
     res.json(result);
-
   } catch (error) {
-
-    // Log de erro
     console.error("Error deleting order:", error);
-
-    // Retorna erro 500
     res.status(500).json({ error: "Error deleting order" });
-
   }
 }
 
-// Exporta as funções para serem usadas nas rotas da aplicação
+// Exporta o conjunto de funções para serem vinculadas às rotas no arquivo de roteamento
 module.exports = {
   createOrder,
   getOrders,
