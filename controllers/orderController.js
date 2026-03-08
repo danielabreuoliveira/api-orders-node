@@ -51,7 +51,7 @@ async function getOrders(req, res) {
     // Solicita ao model a lista completa de pedidos
     const orders = await orderModel.getOrders();
 
-    // Retorna a lista em formato JSON (Status 200 é o padrão)
+    // Retorna a lista em formato JSON 
     res.json(orders);
   } catch (error) {
     console.error("Erro ao buscar os pedidos:", error);
@@ -132,8 +132,8 @@ async function deleteOrder(req, res) {
     // Retorna a confirmação de exclusão
     res.json(result);
   } catch (error) {
-    console.error("Error deleting order:", error);
-    res.status(500).json({ error: "Error deleting order" });
+    console.error("Erro ao deletar o pedido:", error);
+    res.status(500).json({ error: "Erro ao deletar o pedido" });
   }
 }
 
