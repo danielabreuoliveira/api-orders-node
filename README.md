@@ -117,7 +117,7 @@ npm start
 
 ou
 
-node app.js
+node server.js
 🧠 Funcionalidades
 
 ✔️ Autenticação com JWT
